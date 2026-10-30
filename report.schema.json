@@ -1,0 +1,37 @@
+{
+  "type": "object",
+  "properties": {
+    "status": {"type": "string", "enum": ["ok", "no_updates", "partial", "search_failed"]},
+    "overview": {"type": "string"},
+    "highlights": {"type": "array", "items": {"type": "string"}},
+    "items": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {"type": "string"},
+          "organization": {"type": "string"},
+          "date": {"type": "string"},
+          "change": {"type": "string"},
+          "problem": {"type": "string"},
+          "method": {"type": "string"},
+          "evidence": {"type": "string"},
+          "limitations": {"type": "string"},
+          "verification": {"type": "string"},
+          "availability": {"type": "string"},
+          "why_read": {"type": "string"},
+          "sources": {"type": "array", "items": {"type": "object", "properties": {"label": {"type": "string"}, "url": {"type": "string"}}, "required": ["label", "url"], "additionalProperties": false}}
+        },
+        "required": ["title", "organization", "date", "change", "problem", "method", "evidence", "limitations", "verification", "availability", "why_read", "sources"],
+        "additionalProperties": false
+      }
+    },
+    "reading": {"type": "array", "items": {"type": "string"}},
+    "research_questions": {"type": "array", "items": {"type": "string"}},
+    "coverage": {"type": "array", "items": {"type": "string"}},
+    "uncertainties": {"type": "array", "items": {"type": "string"}}
+  },
+  "required": ["status", "overview", "highlights", "items", "reading", "research_questions", "coverage", "uncertainties"],
+  "additionalProperties": false
+}
