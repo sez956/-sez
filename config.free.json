@@ -7,6 +7,13 @@
   "request_interval_seconds": 3.2,
   "timeout_seconds": 25,
   "proxy": "",
+  "translation": {
+    "enabled": true,
+    "target_language": "zh-CN",
+    "chunk_chars": 1200,
+    "request_interval_seconds": 1.5,
+    "timeout_seconds": 12
+  },
   "queries": [
     "cat:cs.RO",
     "(cat:cs.AI OR cat:cs.CV OR cat:cs.LG) AND (all:\"embodied\" OR all:\"vision-language-action\" OR all:\"robot manipulation\" OR all:\"robot navigation\" OR all:\"humanoid\" OR all:\"dexterous\")"

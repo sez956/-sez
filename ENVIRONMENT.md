@@ -5,10 +5,10 @@
 | 用法 | 本机需要什么 | 是否调用 GPT | 适合情况 |
 | --- | --- | --- | --- |
 | GitHub 云端免模型版 | 浏览器和 GitHub 登录 | 否 | 手机、平板、新电脑、不想安装环境 |
-| 本机免模型版（默认） | Python 3.10+；Windows / macOS / Linux | 否 | 自动下载、规则筛选、保存原始摘要 |
+| 本机免模型版（默认） | Python 3.10+；Windows / macOS / Linux | 否 | 自动下载、规则筛选、Google 摘要翻译与原文对照 |
 | 本机模型版（手动选择） | Windows、Python、Codex 登录及可用额度 | 是 | 需要中文综合分析和论文证据核验 |
 
-免模型版不连接任何大模型服务，不需要 GPT 账号或其他模型 API Key。它不能替代模型式精读：英文标题和作者摘要保持原文，页面说明为中文，评分仅作相关性和阅读线索排序。
+免模型版不调用 GPT/Codex，不需要 GPT 账号或模型 API Key。默认尝试用无需密钥的非官方 Google 网页翻译接口生成中文摘要，标题和作者原始摘要也会保留；这不能替代模型式精读，评分仅作相关性和阅读线索排序。
 
 ## 方案一：只有浏览器也能用
 
@@ -89,6 +89,7 @@ python3 -m venv --without-pip .venv
 - `outputs/free/reports/`：历次 HTML、Markdown、JSON。
 - `outputs/free/status.json`：免模型运行状态与错误原因。
 - `outputs/free/history.json`：免模型近 30 天的已报道记录。
+- `outputs/free/translation_cache.json`：完整成功译文的缓存；云端也通过独立缓存延续。
 - 旧模型版的 `日报/`、`日志/`、`运行状态.json` 保持独立。
 
 在 `config.free.json` 调整 `max_items`（1–20）、`min_score`（相关性阈值）和检索词。正文、摘要和备注中的线索按公开的 `RULES` 权重计分；这不能客观证明论文的重要性。默认回看最近 7 天以补漏，旧摘要和备注未改变时不重复报道，版本更新也会标注未核对全文差异。
@@ -96,6 +97,22 @@ python3 -m venv --without-pip .venv
 换设备时下载源码后重新运行环境安装入口，**不要直接复制 `.venv`**。若需要延续免模型去重历史，可单独复制 `outputs/free/history.json`；登录信息和 Python 环境不随仓库迁移。移动文件夹后，也应重建 `.venv` 并重新安装定时任务。
 
 ## 网络与常见问题
+
+### Google 摘要翻译
+
+`config.free.json` 的 `translation.enabled` 默认为 `true`，目标为简体中文（`zh-CN`）。仅将入选论文的公开摘要发到 `translate.googleapis.com`，不传登录凭据，不使用 GPT 或 Google Cloud 密钥，不安装额外包。若不希望发送摘要，将 `enabled` 设为 `false`。
+
+接入的是**非官方网页接口**，不是具有稳定服务承诺的 Google Cloud Translation API；不能保证永久可用或无限使用。Google Cloud 正式接口有其免费额度、配置和计费规则，本工具不会自动切到该付费接口。
+
+长摘要自动按句段拆分，完整译文成功后缓存，原始摘要始终保留。遇到 403/429、连接失败或异常响应，本轮停止后续翻译请求，已有缓存仍可使用；不更换出口或接口来绕过限制。失败条目显示原因并提供 Google 手动翻译入口，长摘要可复制原文过去翻译。
+
+只补翻译最近一期已生成日报，不重新抓取或改变已报道历史：
+
+```powershell
+.\.venv\Scripts\python.exe .\free_digest.py --translate-latest --quiet
+```
+
+macOS/Linux 使用 `.venv/bin/python free_digest.py --translate-latest --quiet`。该命令也适合接口恢复后重试。`--force` 只代表重新执行筛选，仍会跳过已报道论文，因此补翻译时应使用 `--translate-latest`。
 
 | 现象 | 处理 |
 | --- | --- |
@@ -106,10 +123,11 @@ python3 -m venv --without-pip .venv
 | API 失败但 RSS 成功 | 报告显示覆盖受限；RSS 只能保证公告窗口，不保证完整最近 7 天 |
 | 今天再次运行被跳过 | 使用 `--force`；双击入口已带该参数。历史去重仍然生效 |
 | 不弹通知 | 检查 Windows 通知/勿扰设置；直接打开 `latest.html`，macOS/Linux/云端无此通知 |
-| 想要中文摘要和深入重要度判断 | 免模型版不提供自动翻译或推理，可人工阅读，或明确选择消耗额度的模型版 |
+| 中文摘要显示翻译失败 | 查看条目错误；接口限流时稍后用 `--translate-latest` 重试，或点击手动翻译入口；日报原文仍可阅读 |
+| 想要深入的重要度判断和证据核验 | Google 翻译只转换语言；需要人工精读或明确选择消耗额度的模型版 |
 
 如网络需要代理，可把 `config.free.json` 中的 `proxy` 改为本机实际地址，例如 `http://127.0.0.1:7897`；**端口因设备而异，不要直接照搬示例**。也支持 `DIGEST_PROXY` 环境变量；配置为空时使用 Python 的系统/环境代理设置。云端通常保持为空。
 
 不要把带账号密码的代理地址提交到仓库。对于定时任务，配置文件中的本机代理地址更容易保持一致；任务仍要求代理程序在执行时可用。脚本按至少 3.2 秒间隔串行访问 arXiv，遇到限制按规则重试。
 
-参考：[Python Windows 安装说明](https://docs.python.org/3/using/windows.html)、[arXiv API 手册](https://info.arxiv.org/help/api/user-manual.html)、[arXiv RSS](https://info.arxiv.org/help/rss.html)、[arXiv 使用与限频规则](https://info.arxiv.org/help/api/tou.html)、[GitHub 定时事件说明](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)。
+参考：[Python Windows 安装说明](https://docs.python.org/3/using/windows.html)、[arXiv API 手册](https://info.arxiv.org/help/api/user-manual.html)、[arXiv RSS](https://info.arxiv.org/help/rss.html)、[arXiv 使用与限频规则](https://info.arxiv.org/help/api/tou.html)、[GitHub 定时事件说明](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)、[Google 网页翻译库对稳定性的说明](https://py-googletrans.readthedocs.io/en/latest/#note-on-library-usage)、[Google Cloud 正式翻译接口计费](https://cloud.google.com/products/translate/pricing)。

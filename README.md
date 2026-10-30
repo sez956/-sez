@@ -6,10 +6,12 @@
 
 | 模式 | 能做什么 | 环境 |
 | --- | --- | --- |
-| 免模型版（默认） | arXiv API/RSS 检索、日期过滤、去重、规则排序、作者原始摘要、论文链接 | 本机只需 Python 3.10+；也可在 GitHub 云端运行 |
+| 免模型版（默认） | arXiv API/RSS 检索、去重、规则排序、Google 中文摘要翻译与原文对照、论文链接 | 本机只需 Python 3.10+；也可在 GitHub 云端运行 |
 | 模型版（可选） | 多源搜索、原文核验、中文综合分析和阅读建议 | Windows、Python、Codex 登录与可用额度 |
 
-免模型版的规则分用于相关性和阅读线索筛选，**不等同于模型式的重要性判断或学术评审**。摘要保留原文，不自动翻译；作者声称的实验结果也不会被误标为已核验。
+免模型版的规则分用于相关性和阅读线索筛选，**不等同于模型式的重要性判断或学术评审**。默认尝试使用无需密钥的非官方 Google 网页接口翻译摘要，中文译文与作者原文同时保留；机器翻译不代表已核验论文结论。
+
+翻译接口可能限流或失效，无法保证永久免费可用。失败时保留原文、标注原因并提供 Google 手动翻译入口；不调用 GPT，也不配置 Google Cloud 付费 API。翻译功能会将选中论文的公开摘要发送给 Google，成功结果缓存在本地以减少重复请求。
 
 ## 没有本地环境：直接在浏览器使用
 
@@ -41,9 +43,11 @@
 | --- | --- |
 | `free_digest.py` | 跨平台免模型入口 |
 | `config.free.json` | 20 篇上限、规则阈值、检索词和代理配置 |
+| `google_translate.py` | Google 摘要翻译、分段、缓存与失败回退，无第三方依赖 |
 | `outputs/free/latest.html` | 免模型日报，根目录也更新 `最新日报.html` |
 | `outputs/free/status.json` | 免模型运行状态与错误原因 |
 | `outputs/free/history.json` | 免模型已报道历史 |
+| `outputs/free/translation_cache.json` | 成功译文缓存 |
 | `bootstrap.ps1` / `check_environment.py` | 环境创建与检查 |
 | `安装定时任务.cmd` | 安装/切换至免模型版定时任务 |
 | `暂停定时任务.cmd` / `恢复定时任务.cmd` | 管理本机定时任务 |
@@ -51,5 +55,7 @@
 | `ENVIRONMENT.md` | 安装、迁移、网络与云端使用说明 |
 
 运行产物、日志和本机环境默认不会提交到仓库。云端和各台本机的去重历史独立；迁移时重建 `.venv`，不要复制原设备的虚拟环境。论文筛选始终只是科研初筛，重要结论需要阅读原文与复现验证。
+
+要关闭翻译，在 `config.free.json` 将 `translation.enabled` 设为 `false`。要只补翻译最近一期日报、避免重复检索或改变去重历史，可运行 `python free_digest.py --translate-latest --quiet`；Windows 可使用 `.venv\Scripts\python.exe`。
 
 流程参考库森 @kusengo《AI 辅助科研保姆级教程｜选题到投稿全流程》中的检索核验、结构化阅读和分层总结思路。公开接口与安装资料链接见 [ENVIRONMENT.md](ENVIRONMENT.md)。

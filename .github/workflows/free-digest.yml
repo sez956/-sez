@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'free_digest.py'
+      - 'google_translate.py'
       - 'config.free.json'
       - 'check_environment.py'
       - 'tests/**'
@@ -40,6 +41,12 @@ jobs:
             outputs/free/status.json
           key: free-history-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: free-history-v1-
+      - name: Restore Google translation cache
+        uses: actions/cache@v6
+        with:
+          path: outputs/free/translation_cache.json
+          key: free-google-translation-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: free-google-translation-v1-
       - name: Check environment
         run: python check_environment.py
       - name: Verify parsing, filtering and failure handling

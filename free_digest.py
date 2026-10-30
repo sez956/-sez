@@ -19,6 +19,8 @@ from urllib.parse import urlencode
 from urllib.request import ProxyHandler, Request, build_opener
 import xml.etree.ElementTree as ET
 
+from google_translate import manual_url, translate_items
+
 ROOT = Path(__file__).resolve().parent
 TZ = timezone(timedelta(hours=8))
 ATOM = {'a': 'http://www.w3.org/2005/Atom', 'x': 'http://arxiv.org/schemas/atom',
@@ -256,8 +258,8 @@ def markdown(items, now, candidates, coverage, warnings):
     lines = [f'# 具身智能论文日报｜{now:%Y-%m-%d}｜免模型版', '',
              f'检索截止：{now:%Y-%m-%d %H:%M}（北京时间）；最近 7 天滚动补漏，历史去重。',
              f'有效窗口内候选 {candidates} 篇，按规则选入 {len(items)} 篇，最多 20 篇，不设最低数量。', '',
-             '**本报告未调用 GPT、Codex 或任何大模型。评分是关键词相关性与线索排序，不是学术质量评审；摘要保持原文，未自动翻译，也未核对全文或独立验证实验。**', '',
-             '状态：' + ('部分来源/覆盖受限' if warnings else ('检索完成' if items else '无达到筛选阈值的新增论文')), '']
+             '**本报告未调用 GPT 或 Codex。评分是关键词相关性与线索排序，不是学术质量评审；中文摘要若存在，为 Google 网页接口机器翻译，术语与指标应对照保留的原文；未核对全文或独立验证实验。**', '',
+             '状态：' + ('部分来源或翻译受限' if warnings else ('检索完成' if items else '无达到筛选阈值的新增论文')), '']
     if not items:
         lines += [('本次未选入论文；来源覆盖受限，不能判断是否没有重要新增。' if warnings
                    else '本次没有达到规则阈值且未报道的论文；不使用旧文凑数。'), '']
@@ -267,7 +269,15 @@ def markdown(items, now, candidates, coverage, warnings):
         if p['announced']:
             lines.append('RSS 公告：' + display_date(p['announced']) + '；不能据此认定首次发表时间。')
         lines += [p['change'], '', f"规则分：{p['score']}；" + '；'.join(f'{name} +{weight}' for name, weight in p['reasons']), '',
-                  f"[论文原页]({p['url']})", '', '**作者原始摘要（未核验、未翻译）**', '', p['abstract'], '']
+                  f"[论文原页]({p['url']})", '']
+        if p.get('abstract_zh'):
+            lines += ['**中文摘要（Google 机器翻译，未人工校对）**', '', p['abstract_zh'], '']
+        elif p.get('translation_status') == 'failed':
+            lines += ['**中文翻译暂不可用，原文已保留**：' + p.get('translation_error', ''), '']
+        elif p.get('translation_status') == 'disabled':
+            lines += ['中文摘要翻译未启用。', '']
+        lines += ['**作者原始摘要（未核验）**', '', p['abstract'], '',
+                  f"[打开 Google 翻译（长摘要请复制原文）]({manual_url(p['abstract'])})", '']
         if p.get('comment'):
             lines += ['作者备注：' + p['comment'], '']
         urls = re.findall(r'https?://[^\s<>]+', p['abstract'] + ' ' + p.get('comment', ''))
@@ -350,32 +360,57 @@ def run(args):
             return 0
         now = datetime.now(TZ)
         state = read_json(output / 'status.json', {})
-        if not args.force and state.get('last_success_day') == now.strftime('%Y-%m-%d'):
+        refresh_translation = getattr(args, 'translate_latest', False)
+        if not args.force and not refresh_translation and state.get('last_success_day') == now.strftime('%Y-%m-%d'):
             print('今日免模型日报已经生成。')
             return 0
         try:
             history = read_json(output / 'history.json', {})
             history = {key: value for key, value in history.items() if date(value['reported_at']) >= now - timedelta(days=30)}
             dump(output / 'status.json', dict(state, status='running', started_at=now.isoformat(), engine='rules-no-model'))
-            papers, coverage, warnings = collect(config, now)
-            items, candidates = select(papers, history, config, now)
+            if refresh_translation:
+                saved = sorted((output / 'reports').glob('*.json'))
+                if not saved:
+                    raise RuntimeError('还没有日报，请先正常运行一次，再使用 --translate-latest。')
+                bundle = read_json(saved[-1], {})
+                items = bundle['items']
+                candidates = bundle.get('candidates', len(items))
+                coverage = bundle['coverage']
+                source_warnings = bundle.get('source_warnings', bundle['warnings'])
+                retrieved_at = date(bundle.get('retrieved_at')) or datetime.strptime(saved[-1].stem, '%Y-%m-%d_%H%M%S').replace(tzinfo=TZ)
+            else:
+                papers, coverage, source_warnings = collect(config, now)
+                items, candidates = select(papers, history, config, now)
+                retrieved_at = datetime.now(TZ)
+            translation, translation_warnings = translate_items(
+                items, config.get('translation', {}), output / 'translation_cache.json',
+                config.get('proxy') or os.environ.get('DIGEST_PROXY', ''))
+            warnings = source_warnings + translation_warnings
             # Record the actual completion time instead of claiming retrieval ended at startup.
             completed = datetime.now(TZ)
-            report = markdown(items, completed, candidates, coverage, warnings)
+            report = markdown(items, retrieved_at, candidates, coverage, warnings)
+            if translation['enabled']:
+                report += (f"\n## 摘要翻译\n\nGoogle 网页翻译：新译 {translation['translated']} 篇，"
+                           f"复用缓存 {translation['cached']} 篇，失败 {translation['failed']} 篇；"
+                           "无需 API Key，不调用 GPT。非官方接口可能受限；译文仅供阅读辅助，原文始终保留。\n")
             page = html_page(report)
             stamp = now.strftime('%Y-%m-%d_%H%M%S')
-            dump(output / 'reports' / (stamp + '.json'), {'engine': 'rules-no-model', 'items': items, 'coverage': coverage, 'warnings': warnings})
+            dump(output / 'reports' / (stamp + '.json'), {'engine': 'rules-no-model', 'items': items, 'coverage': coverage,
+                 'warnings': warnings, 'source_warnings': source_warnings, 'translation': translation,
+                 'retrieved_at': retrieved_at.isoformat(), 'candidates': candidates})
             atomic(output / 'reports' / (stamp + '.md'), report)
             atomic(output / 'reports' / (stamp + '.html'), page)
             atomic(output / 'latest.md', report)
             atomic(output / 'latest.html', page)
             if output == (ROOT / 'outputs' / 'free').resolve():
                 atomic(ROOT / '最新日报.html', page)
-            for paper in items:
-                history[paper['id']] = {'fingerprint': paper['fingerprint'], 'reported_at': now.isoformat()}
-            dump(output / 'history.json', history)
+            if not refresh_translation:
+                for paper in items:
+                    history[paper['id']] = {'fingerprint': paper['fingerprint'], 'reported_at': now.isoformat()}
+                dump(output / 'history.json', history)
             dump(output / 'status.json', {'status': 'partial' if warnings else ('ok' if items else 'no_updates'),
-                                        'engine': 'rules-no-model', 'last_success_day': now.strftime('%Y-%m-%d'),
+                                        'engine': 'rules-no-model', 'translation': translation,
+                                        'last_success_day': state.get('last_success_day') if refresh_translation else now.strftime('%Y-%m-%d'),
                                         'finished_at': completed.isoformat(), 'count': len(items), 'report': str(output / 'latest.html')})
             summary = os.environ.get('GITHUB_STEP_SUMMARY')
             if summary:
@@ -406,4 +441,5 @@ if __name__ == '__main__':
     parser.add_argument('--output-dir', type=Path, default=ROOT / 'outputs' / 'free')
     parser.add_argument('--force', action='store_true')
     parser.add_argument('--quiet', action='store_true')
+    parser.add_argument('--translate-latest', action='store_true', help='只翻译最近一期已有日报，不重新检索或改变去重历史')
     sys.exit(run(parser.parse_args()))
