@@ -6,6 +6,7 @@
 运行状态.json
 定时任务.xml
 .run.lock
+outputs/
 *.tmp
 
 # Python and local configuration

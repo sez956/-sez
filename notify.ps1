@@ -1,9 +1,13 @@
-﻿param([ValidateSet('success','failed')][string]$Result = 'success')
+﻿param(
+    [ValidateSet('success','failed')][string]$Result = 'success',
+    [string]$ReportPath = '',
+    [string]$StatusPath = ''
+)
 $ErrorActionPreference = 'Stop'
-$reportPath = Join-Path $PSScriptRoot '最新日报.html'
-$statusPath = Join-Path $PSScriptRoot '运行状态.json'
+if (-not $ReportPath) { $ReportPath = Join-Path $PSScriptRoot '最新日报.html' }
+if (-not $StatusPath) { $StatusPath = Join-Path $PSScriptRoot '运行状态.json' }
 $message = if ($Result -eq 'success') { '今日成果汇总已生成，点击打开日报。' } else { '本次检索未完成，点击查看运行状态；定时任务会自动重试。' }
-$openPath = if ($Result -eq 'success') { $reportPath } else { $statusPath }
+$openPath = if ($Result -eq 'success') { $ReportPath } else { $StatusPath }
 try {
     [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
     [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null

@@ -1,0 +1,56 @@
+name: Free embodied AI digest
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'free_digest.py'
+      - 'config.free.json'
+      - 'check_environment.py'
+      - 'tests/**'
+      - '.github/workflows/free-digest.yml'
+  schedule:
+    # UTC 01:00 = Beijing 09:00. Scheduled runs may be delayed by GitHub.
+    - cron: '0 1 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: free-embodied-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Restore duplicate history
+        uses: actions/cache@v6
+        with:
+          path: |
+            outputs/free/history.json
+            outputs/free/status.json
+          key: free-history-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: free-history-v1-
+      - name: Check environment
+        run: python check_environment.py
+      - name: Verify parsing, filtering and failure handling
+        run: python -m unittest discover -s tests -v
+      - name: Generate digest without any language model
+        run: python free_digest.py --quiet --force
+      - name: Save HTML, Markdown and status
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: embodied-digest-${{ github.run_id }}
+          path: outputs/free/
+          retention-days: 30
+          if-no-files-found: warn

@@ -1,0 +1,15 @@
+{
+  "max_items": 20,
+  "min_score": 7,
+  "lookback_days": 7,
+  "page_size": 50,
+  "max_pages_per_query": 6,
+  "request_interval_seconds": 3.2,
+  "timeout_seconds": 25,
+  "proxy": "",
+  "queries": [
+    "cat:cs.RO",
+    "(cat:cs.AI OR cat:cs.CV OR cat:cs.LG) AND (all:\"embodied\" OR all:\"vision-language-action\" OR all:\"robot manipulation\" OR all:\"robot navigation\" OR all:\"humanoid\" OR all:\"dexterous\")"
+  ],
+  "rss_fallback": "https://rss.arxiv.org/rss/cs.RO+cs.AI+cs.CV+cs.LG"
+}
